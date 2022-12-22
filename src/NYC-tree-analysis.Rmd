@@ -16,14 +16,17 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE,
                       message = FALSE,
                       fig.path = "../results/figures/")
+
+setwd("~/R/workspace/projects/datacamp-NYC-trees/src")
 ```
 
 # Analysis Plan
 
 
+
 ## Data
 
-For this analysis we are given two datasets, the first with street tree census data and the second with neighborhood geographical information.  The observations in both data sets are within the Manhattan, NYC area.
+For this analysis we are given two data sets, the first with street tree census data and the second with neighborhood geographical information.  The observations in both data sets are within the Manhattan, NYC area.
 
 ### Tree census variables
 
@@ -70,6 +73,7 @@ To visualize Manhattan's neighborhoods and their trees in one plot, we will plot
 
 [4. What ten tree species would you recommend the city plant in the future?](#recommendations-for-future-tree-planting)
 
+To answer this question, we will quantify the proportion of trees in good health for each species.  Additionally, we will gather the median, 75th quantile, and maximum diameters, each of which are measurements of the higher 50% of trees and for which we will assume each represent typical sizes of adult trees.  With these numbers, we will employ a weighted ranking approach to arrange the tree species by those who have the highest proportion of trees in good health and have a larger size.  Additionally, we will filter out species identified by the United States Geological Survey as being invasive species.  Finally, we will qualitatively research the top tree species until 10 ideal species are selected.
 
 
 
@@ -86,7 +90,7 @@ For this analysis we will use the following libraries:
 We will first load in these libraries and then the tree census data set.
 
 ```{r load, results = 'hide'}
-libs <- c('sf', 'tidytext', 'pals', 'units', 'gridExtra', 'tidyverse')
+libs <- c('sf', 'tidytext', 'pals', 'units', 'htmlTable', 'gridExtra', 'tidyverse')
 
 sapply(libs, library, character.only = TRUE)
 
@@ -172,6 +176,29 @@ The distribution of trunk diameters is right-skewed with some extreme values.  T
 
 There are 43 tree diameter measures that are 0.  This could be a results of data entry error or that the tree was not over 54 inches to measure the diameter.
 
+For the right-skew and extreme points, we will aim to keep the tailing while removing likely outliers.  It appears at around 50 inches the tailing ends and the more extreme points begin, so we will use that as a cut-off point and replace the values above that threshold with their respective species median diamater.
+
+```{r outliers-median}
+# Get the median diameter for each tree species
+diam_med <- trees %>%
+  group_by(spc_common) %>%
+  summarize(median = median(tree_dbh))
+
+# Replace outliers with their respecitve species median diamater
+trees <- trees %>%
+  mutate(tree_dbh = ifelse(tree_dbh > 50,
+                           diam_med$median[which(diam_med$spc_common %in% spc_common)],
+                           tree_dbh))
+trees %>%
+  filter(status == 'Alive') %>%
+    ggplot(aes(x = tree_dbh)) +
+    geom_histogram(bins = 50) +
+    geom_rug()
+```
+
+
+
+
 ### Tree problems
 
 ```{r}
@@ -216,7 +243,7 @@ sp1 <- species_10 %>%
   ggplot(aes(x = spc_common,
              y = total_trees)) +
   geom_col() +
-    geom_col(fill = 'steelblue2',
+    geom_col(fill = 'chartreuse4',
              color = 'grey40') +
     scale_x_discrete(labels = function(x) str_wrap(x,
                                                    width = 20,
@@ -247,7 +274,7 @@ sp2 <- scp_top %>%
   ggplot(aes(x = word,
            y = n)) +
   geom_col() +
-    geom_col(fill = 'goldenrod3',
+    geom_col(fill = 'chocolate3',
              color = 'grey40') +
     scale_x_discrete(labels = function(x) str_wrap(x,
                                                    width = 20,
@@ -371,56 +398,79 @@ ggplot(manhattan) +
 
 ## Recommendations for future tree planting
 
+
 ```{r}
 trees_health_diam <- trees %>%
   group_by(spc_common) %>%
   summarize(perc_good = sum(health == 'Good') / n() * 100,
             perc_fair = sum(health == 'Fair') / n() * 100,
-            avg_diam = mean(tree_dbh),
+            perc_poor = sum(health == 'Poor') / n() * 100,
+            perc_good_fair = perc_good + perc_fair,
+            median_diam = median(tree_dbh),
+            diam_75 = as.numeric(quantile(tree_dbh, 0.75)),
+            max_diam = max(tree_dbh),
             total = n()) %>%
-  filter(total >= 100) %>%
+  filter(total >= 50) %>%
   arrange(desc(perc_good))
 
 head(trees_health_diam)
-tail(trees_health_diam)
+
+head(trees_health_diam,
+     n = 20) %>%
+  mutate(across(perc_good:perc_good_fair, ~ round(.x, 1))) %>%
+  htmlTable(header = c('Species', '% Good', '% Fair', '% Poor', '% Good or Fair', 'Median Diameter',
+                       'Max Diameter', 'Total'))
+
+# Filter out invasive species
+invasive_df <- read_csv('../data/external/USRIISv2_MasterList.csv') %>%
+  select(vernacularName) %>%
+  mutate(vernacularName = tolower(vernacularName))
+
+invasive_species <- trees_health_diam %>%
+  mutate(spc_common = tolower(spc_common)) %>%
+  inner_join(invasive_df %>% mutate(vernacularName = tolower(vernacularName)),
+             by = c('spc_common' = 'vernacularName')) %>%
+  distinct()
 
 
-ggplot(trees_health_diam,
-       aes(x = avg_diam)) +
-  geom_point(aes(y = perc_good), color = 'red') +
-  geom_point(aes(y = perc_fair))
+trees_noninvasive <- trees_health_diam %>%
+  filter(!tolower(spc_common) %in% invasive_species$spc_common)
 
+# Weighted ranks-based approach
+trees_noninvasive %>%
+  mutate(good_rank = rank(1 / perc_good),
+         poor_rank = rank(perc_poor),
+         median_rank = rank(1 / median_diam),
+         diam_75_rank = rank(1 / diam_75),
+         max_rank = rank(1 / max_diam)) %>%
+  rowwise() %>%
+  mutate(avg_rank = mean(c(good_rank * 3/4, poor_rank / 4, median_rank * 3/12, diam_75_rank / 6, max_rank * 1/12))) %>%
+  ungroup() %>%
+  mutate(perc_good = round(perc_good, 1),
+         perc_poor = round(perc_poor, 1),
+         avg_rank = rank(avg_rank)) %>%
+  arrange(avg_rank) %>%
+  select(spc_common, perc_good, perc_poor, median_diam, diam_75, max_diam, avg_rank) %>%
+  head(n = 20) %>%
+  htmlTable(header = c('Species', '% Good', '% Poor', 'Median Diameter', '75th Quantile', 'Max Diameter', 'Weighted Rank'))
 ```
 
+The rankings are weighted equally between tree health and tree size.  For tree health, the proportion of trees in 'good' and 'poor' health account for 75% and 25% of its weight, respectively.  For tree size, the median diameter, diameter for the 75th quantile, and maximum diameter account for 50%, 33.3% and 16.7%, or 1/2, 1/3, and 1/6, of its weight, respectively.
+
+Of the top 20 weighted ranks, 6 species of oak and 3 species of elm are represented, indicating that oak and elm trees generally have good health and grow to a larger size in Manhattan compared to other species.  Therefore, these types of tree species generally should have preferences for future planting. 
+
+Of the top 20 species, 6 are invasive species and should not be in consideration for future planting.  These species are:
 
 
+The tree that ranked highest for having good health and a large size is the willow oak.  
+
+The pin oak is the third ranking tree on the list. As per the [University of Kentucky Department of Horticulture](https://www.uky.edu/hort/Pin-oak), while the pin oak is easy to transplant and ideal for large landscapes, it has a high-maintenance cost due to its lowly hanging branches.
+
+Kentucky coffeetree [UKY](https://www.uky.edu/hort/Kentucky-Coffeetree) 
+
+The American elm had the largest median, 75th quantile, and maximum diameter in the top 20 list while also having over 80% of trees in good health.  [USDA](https://www.srs.fs.usda.gov/pubs/misc/ag_654/volume_2/ulmus/americana.htm)
+
+[United States Register of Introduced and Invasive Species (US-RIIS) (ver. 2.0, November 2022)](https://www.sciencebase.gov/catalog/item/62d59ae5d34e87fffb2dda99?community=USGS+Science+Analytics+and+Synthesis+Foundational+Data)
 
 
-
-```{r}
-# Find and filter only species with at least 100 counts
-trees_100 <- trees %>%
-  group_by(spc_common) %>%
-  summarize(n = n()) %>%
-  filter(n >= 100)
-
-trees_mod <- left_join(trees_100, trees, by = 'spc_common')
-
-# Create ordinal variable for health
-
-trees_mod$health <- ordered(trees_mod$health,
-                            levels = c('Dead', 'Poor', 'Fair', 'Good'))
-
-library(MASS)
-
-trees_fit <- polr(health ~ spc_common + tree_dbh,
-                  data = trees_mod,
-                  Hess = TRUE)
-
-summary(trees_fit)
-```
-
-
-
-
-
+[USDA NY Weeds](https://adminplants.sc.egov.usda.gov/java/invasiveOne?pubID=NEAST)
