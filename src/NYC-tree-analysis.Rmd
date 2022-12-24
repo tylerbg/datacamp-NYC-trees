@@ -1,5 +1,5 @@
 ---
-title: "How to Improve NYC's Tree Population"
+title: "Improving Manhattan's tree population"
 author: "Tyler Garner"
 date: "2022-12-20"
 knit: (function(input_file, encoding) {
@@ -15,49 +15,60 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE,
                       message = FALSE,
-                      fig.path = "../results/figures/")
+                      collapse = TRUE,
+                      fig.path = "../results/figures/",
+                      fig.align = 'center')
 
 setwd("~/R/workspace/projects/datacamp-NYC-trees/src")
 ```
 
-# Analysis Plan
+# Introduction
 
+Identifying species with desirable characteristics is important for urban design teams to best create a thriving, green atmosphere.  One factor to consider is tree maintenance costs, which can result from leaf and fruit clearing or branch trimming.  Another consideration is whether a species is considered invasive and can pose a problem to other plant life in the area.
 
+This analysis employed NYC street tree census data to determine the tree species with the most desirable characteristics as defined by overall tree health and size.  Insights from this analysis can be used to identify the best trees to plant on the streets of Manhattan.
+
+This report covers the following:
+
+1. Identify the most common tree species in Manhattan.
+2. Identify the neighborhoods with the most trees.
+3. Create a visualization of Manhattan's neighborhoods and tree locations.
+4. Select the 10 best tree species for future planting.
 
 ## Data
 
-For this analysis we are given two data sets, the first with street tree census data and the second with neighborhood geographical information.  The observations in both data sets are within the Manhattan, NYC area.
+Two data sets are provided for this analysis.  The first data set contains street tree census data and the second has basic neighborhood geographical information.  The observations in both data sets are within the Manhattan, NYC area.
 
 ### Tree census variables
 
-- "tree_id" - Unique id of each tree.
-- "tree_dbh" - The diameter of the tree in inches measured at 54 inches above the ground.
-- "curb_loc" - Location of the tree bed in relation to the curb. Either along the curb (OnCurb) or offset from the curb (OffsetFromCurb).
-- "spc_common" - Common name for the species.
-- "status" - Indicates whether the tree is alive or standing dead.
-- "health" - Indication of the tree's health (Good, Fair, and Poor).
-- "root_stone" - Indicates the presence of a root problem caused by paving stones in the tree bed.
-- "root_grate" - Indicates the presence of a root problem caused by metal grates in the tree bed.
-- "root_other" - Indicates the presence of other root problems.
-- "trunk_wire" - Indicates the presence of a trunk problem caused by wires or rope wrapped around the trunk.
-- "trnk_light" - Indicates the presence of a trunk problem caused by lighting installed on the tree.
-- "trnk_other" - Indicates the presence of other trunk problems.
-- "brch_light" - Indicates the presence of a branch problem caused by lights or wires in the branches.
-- "brch_shoe" - Indicates the presence of a branch problem caused by shoes in the branches.
-- "brch_other" - Indicates the presence of other branch problems.
-- "postcode" - Five-digit zip code where the tree is located.
-- "nta" - Neighborhood Tabulation Area (NTA) code from the 2010 US Census for the tree.
-- "nta_name" - Neighborhood name.
-- "latitude" - Latitude of the tree, in decimal degrees.
-- "longitude" - Longitude of the tree, in decimal degrees.
+- **tree_id** - Unique id of each tree.
+- **tree_dbh** - The diameter of the tree in inches measured at 54 inches above the ground.
+- **curb_loc** - Location of the tree bed in relation to the curb. Either along the curb (OnCurb) or offset from the curb (OffsetFromCurb).
+- **spc_common** - Common name for the species.
+- **status** - Indicates whether the tree is alive or standing dead.
+- **health** - Indication of the tree's health (Good, Fair, and Poor).
+- **root_stone** - Indicates the presence of a root problem caused by paving stones in the tree bed.
+- **root_grate** - Indicates the presence of a root problem caused by metal grates in the tree bed.
+- **root_other** - Indicates the presence of other root problems.
+- **trunk_wire** - Indicates the presence of a trunk problem caused by wires or rope wrapped around the trunk.
+- **trnk_light** - Indicates the presence of a trunk problem caused by lighting installed on the tree.
+- **trnk_other** - Indicates the presence of other trunk problems.
+- **brch_light** - Indicates the presence of a branch problem caused by lights or wires in the branches.
+- **brch_shoe** - Indicates the presence of a branch problem caused by shoes in the branches.
+- **brch_other** - Indicates the presence of other branch problems.
+- **postcode** - Five-digit zip code where the tree is located.
+- **nta** - Neighborhood Tabulation Area (NTA) code from the 2010 US Census for the tree.
+- **nta_name** - Neighborhood name.
+- **latitude** - Latitude of the tree, in decimal degrees.
+- **longitude** - Longitude of the tree, in decimal degrees.
 
 ### Neighborhood variables
 
-- "ntacode" - NTA code (matches Tree Census information).
-- "ntaname" - Neighborhood name (matches Tree Census information).
-- "geometry" - Polygon that defines the neighborhood.
+- **ntacode** - NTA code (matches Tree Census information).
+- **ntaname** - Neighborhood name (matches Tree Census information).
+- **geometry** - Polygon that defines the neighborhood.
 
-## Questions and goals
+## Analysis Plan
 
 [1. What are the most common tree species in Manhattan?](#most-common-tree-species-in-manhattan)
 
@@ -76,7 +87,6 @@ To visualize Manhattan's neighborhoods and their trees in one plot, we will plot
 To answer this question, we will quantify the proportion of trees in good health for each species.  Additionally, we will gather the median, 75th quantile, and maximum diameters, each of which are measurements of the higher 50% of trees and for which we will assume each represent typical sizes of adult trees.  With these numbers, we will employ a weighted ranking approach to arrange the tree species by those who have the highest proportion of trees in good health and have a larger size.  Additionally, we will filter out species identified by the United States Geological Survey as being invasive species.  Finally, we will qualitatively research the top tree species until 10 ideal species are selected.
 
 
-
 # EDA
 
 For this analysis we will use the following libraries:
@@ -85,9 +95,10 @@ For this analysis we will use the following libraries:
 - `tidytext` - tools for text analysis.
 - `pals` - provides additional and larger color palettes for visualizations.
 - `units` - for calculating and displaying units in plots.
+- `htmlTable` - to build web-friendly tables.
 - `tidyverse` - suite of tools for data manipulation and visualization.
 
-We will first load in these libraries and then the tree census data set.
+After loading the libraries and the tree census data set we will print information about the data, including its dimensions and some descriptive statistics of the variables.
 
 ```{r load, results = 'hide'}
 libs <- c('sf', 'tidytext', 'pals', 'units', 'htmlTable', 'gridExtra', 'tidyverse')
@@ -95,21 +106,14 @@ libs <- c('sf', 'tidytext', 'pals', 'units', 'htmlTable', 'gridExtra', 'tidyvers
 sapply(libs, library, character.only = TRUE)
 
 trees <- read_csv('../data/raw/trees.csv')
-```
 
-We will then get some information about the data set, including its dimensions, structure, and some descriptive statistics of the variables.
-
-```{r data-info}
 dim(trees)
-str(trees)
 summary(trees)
 ```
 
+The data set contains 64,229 observations across 21 columns, most of which are of the `character` type and may be useful as factors.  The maximum and minimum values for tree diameter (**tree_dbh**) appear to be very high and low, respectively, so we should check for potential outliers.
 
-
-There are no apparent missing values.
-
-For the `character` variables, we will determine how many unique values are in each variable to assess whether we want to keep them as `character` or convert them to the `factor` type.
+For the `character` variables, we will determine how many unique values are in each to assess whether we want to keep them as `character` or convert them to the `factor` type.
 
 ```{r unique-chars}
 trees %>%
@@ -117,7 +121,7 @@ trees %>%
   apply(2, function(x) length(unique(x)))
 ```
 
-The number of unique values for each of the `character` columns ranges between 2 and 129, with most variables at or near 2.  Since we have a large amount of observations (over 60,000), we can assign each as factors.  We will then print new summary statistics for the data set.
+The number of unique values for each of the `character` columns ranges between 2 and 129, with most variables at or near 2.  Since we have a large amount of observations we can assign each as the `factor` type which will be useful for grouping observations by their features.  We will then print new summary statistics for the data set.
 
 ```{r char-to-factor}
 trees <- trees %>%
@@ -126,7 +130,7 @@ trees <- trees %>%
 summary(trees)
 ```
 
-In the output, there are now obvious missing values, specifically in the *spc_common* and *health* columns.  The total number of missing values in both variables is about the same, so we will check how many observations are missing values for both variables.  Also to note, the number of missing values also matches the 'Dead' value for the *status* variable, for which we will also check how many missing values belong.
+The summary statistics now report missing values, specifically in the **spc_common** and **health** columns.  The total number of missing values in both variables is about the same, so we will check how many observations are missing values for both variables.  Also to note, the number of missing values also matches the 'Dead' value for the **status** variable, so we will check how many observations have missing values in both variables.
 
 ```{r obs-na}
 sum(is.na(trees$spc_common) & is.na(trees$health))
@@ -134,7 +138,7 @@ sum(is.na(trees$spc_common) & is.na(trees$health))
 sum(is.na(trees$health) & trees$status == 'Dead')
 ```
 
-All observations except one with missing values in the *health* variable shares a missing value in the *spc_common* variable.  Additionally, all of the missing values in the *health* variable come from observations where *health* has a value of 'Dead'.  Therefore, instead of dropping missing values we will recode the missing values in *spc_common* as 'Unknown' and those in *health* as 'Dead'.
+All observations except one with missing values in the **health** variable shares a missing value in the **spc_common** variable.  Additionally, all of the missing values in the **health** variable come from observations where **health** has a value of 'Dead'.  Therefore, instead of dropping observations we will recode the missing values in **spc_common** as 'Unknown' and those in **health** as 'Dead'.
 
 ```{r na-recode}
 trees <- trees %>%
@@ -143,40 +147,46 @@ trees <- trees %>%
 ```
 
 
-### Number of each species
+### Number of trees by species
 
-```{r}
+As show above, there are 129 unique values for the common species names (**spc_common**), including the formerly missing values.  We will create a histogram and rug plot to visualize how the total observations for each common species name are distributed.
+
+```{r spc-pop-hist}
 trees %>%
   count(spc_common) %>%
   ggplot(aes(x = n)) +
-    geom_histogram(bins = 100) +
-    geom_rug()
+    geom_histogram(bins = 100, fill = 'tomato3', color = 'grey40') +
+    geom_rug(color = 'grey40') +
+    labs(x = 'Total number of trees',
+         y = 'Counts for the species',
+         title = 'Histogram and rug plot of the total number of trees per species') +
+    theme_bw()
 ```
 
-From the distribution of species we can see that most of the species are uncommon around Manhattan, while a small subset of trees are quite common and apparently make up the majority of all trees.
-
-```{r}
-trees %>% count(spc_common) %>% filter(n > 2500) %>% select(n) %>% sum() / nrow(trees)
-```
+In the plot we can see that most of the species are uncommon around Manhattan, while a small subset of trees are quite common and apparently make up the majority of all trees.  Specifically, there are `r trees %>% count(spc_common) %>% filter(n >= 2500) %>% nrow()` species with a population of at least 2,500 in Manhattan which represent `r paste0(round(trees %>% count(spc_common) %>% filter(n >= 2500) %>% select(n) %>% sum() / nrow(trees), 3) * 100, '%')` of the total tree population.
 
 
 ### Tree trunk sizes
 
-```{r trunk-sizes}
+Next, we will similarly create a histogram and rug plot to observe the distribution of tree trunk diameters.
+
+```{r trunk-sizes-hist}
 trees %>%
   filter(status == 'Alive') %>%
     ggplot(aes(x = tree_dbh)) +
-    geom_histogram(bins = 100) +
-    geom_rug()
-
-sum(trees$tree_dbh == 0)
+    geom_histogram(bins = 100, fill = 'lavender', color = 'grey40') +
+    geom_rug(color = 'grey40') +
+    labs(x = 'Tree diameter',
+         y = 'Count of trees',
+         title = 'Histogram and rug plot of the diameters per tree') +
+    theme_bw()
 ```
 
 The distribution of trunk diameters is right-skewed with some extreme values.  The right-skewness might be expected when measuring the size of plants that generally have grown for a long period of time.  However, the extreme values might not be expected and could be the result of entry error.
 
-There are 43 tree diameter measures that are 0.  This could be a results of data entry error or that the tree was not over 54 inches to measure the diameter.
+There are `r `sum(trees$tree_dbh == 0)` tree diameter measures that are 0.  This could be the result of data entry error or that these trees were not over 54 inches so their diameters could not be measured.
 
-For the right-skew and extreme points, we will aim to keep the tailing while removing likely outliers.  It appears at around 50 inches the tailing ends and the more extreme points begin, so we will use that as a cut-off point and replace the values above that threshold with their respective species median diamater.
+For the right-skew and extreme points, we will aim to keep the tailing while removing likely outliers.  It appears that at around 50 inches the tailing ends and more extreme and more isolated values begin to present.  So, we will choose that as a cut-off point and replace the values above that threshold with their respective species median diameter.
 
 ```{r outliers-median}
 # Get the median diameter for each tree species
@@ -189,36 +199,124 @@ trees <- trees %>%
   mutate(tree_dbh = ifelse(tree_dbh > 50,
                            diam_med$median[which(diam_med$spc_common %in% spc_common)],
                            tree_dbh))
-trees %>%
-  filter(status == 'Alive') %>%
-    ggplot(aes(x = tree_dbh)) +
-    geom_histogram(bins = 50) +
-    geom_rug()
 ```
-
-
 
 
 ### Tree problems
 
+The data set consists of 9 variables which indicate whether some type of issue is present for each tree, which are generally categorized as either a root, trunk, or branch problem.  We can plot the total proportion of trees experiencing each problem to determine if any issues are more common than others.
+
+```{r tree-diam-problems}
+# Subset and lengthen a new df with diameters, health, and root problems for further analysis
+trees_probs <- trees %>%
+  select(tree_dbh, health, root_stone:brch_other) %>%
+  pivot_longer(root_stone:brch_other,
+               names_to = 'Problem',
+               values_to = 'Present') %>%
+  mutate(Problem = paste0(str_replace_all(Problem, c('_' = ' (',
+                                                     'trnk' = 'trunk',
+                                                     'brch' = 'branch')),
+                          ')'))
+
+# Create a standard theme to use when the x-axis tick labels are long
+theme_long_labs <- theme_bw() +
+    theme(axis.text.x = element_text(angle = 30,
+                                     vjust = 1,
+                                     hjust = 1))
+
+# Plot the proportion of trees with each problem
+trees_probs %>%
+  group_by(Problem) %>%
+  summarize(prop_yes = sum(Present == 'Yes') / n()) %>%
+  mutate(Problem = fct_reorder(factor(Problem), desc(prop_yes))) %>%
+  ggplot(aes(x = Problem, y = prop_yes)) +
+    geom_col(fill = 'honeydew3', color = 'grey40') +
+    labs(x = 'Problem type',
+         y = 'Proportion of trees with the type of problem',
+         title = 'Bar plot of the proportion of trees with a root, trunk, or branch problem') +
+    theme_long_labs
+```
+
+The barplot shows that problems caused by paving stones in the tree bed have the highest proportion at nearly 20% and double that of the next issue.  Additionally, the other two root-based problems have a relatively high number of incidents to overall suggest that issues with tree roots are the most prevalent issues among those recorded.  Finally, the proportion of branch issues caused by shoes in the branches is very low.
+
+One insight we may want to gather is how tree sizes are distributed depending on whether a problem exists.
+
 ```{r}
-# Create new variables to indicate whether there are any root, trunk, or branch problems at all
+# Create boxplots of tree diameters by each of the 9 tree problems
+trees_probs %>%
+  select(tree_dbh, Problem, Present) %>%
+  ggplot(aes(x = Present, y = tree_dbh)) +
+    geom_boxplot(fill = 'grey95') +
+    facet_wrap(~ Problem) +
+    labs(x = 'Is the problem present?',
+         y = 'Tree diameter',
+         title = 'Boxplots of tree diameters by different tree problems') +
+    theme_bw()
+```
 
-trees <- trees %>%
-  mutate(root_any = ifelse(root_stone == 'Yes' | root_grate == 'Yes' | root_other == 'Yes', 'Yes', 'No'),
-         trnk_any = ifelse(trunk_wire == 'Yes' | trnk_light == 'Yes' | trnk_other == 'Yes', 'Yes', 'No'),
-         brch_any = ifelse(brch_shoe == 'Yes' | brch_light == 'Yes' | brch_other == 'Yes', 'Yes', 'No'))
+In the boxplots above, we can see that for each type of issues, trees generally have the same distribution of diameters regardless of whether that issue is present or not, with the exception that overall when a problem is present then there are less higher diameters.
 
-trees %>%
-  select(nta_name, root_stone:brch_other, root_any:brch_any) %>%
-  pivot_longer(!nta_name) %>%
-  group_by(nta_name, name) %>%
-  summarize(yes = sum(value == 'Yes') / n(),
-            no = sum(value == 'No') / n()) %>%
-  pivot_longer(c(yes, no), names_to = 'yes_no') %>%
-  ggplot(aes(x = yes_no, y = value)) +
-    geom_col() +
-    facet_wrap(~ name)
+We should also look at whether tree health is affected by any of these problems.
+
+```{r}
+# Create bar plots of the total proportion of problems by each type of health.
+trees_probs %>%
+  select(health, Problem, Present) %>%
+  group_by(health, Problem) %>%
+  summarize(prop_yes = sum(Present == 'Yes') / n()) %>%
+  mutate(health = factor(health, levels = c('Good', 'Fair', 'Poor'))) %>%
+  drop_na() %>%
+  ggplot(aes(x = health, y = prop_yes)) +
+    geom_col(fill = 'darkslateblue', color = 'grey40') +
+    facet_wrap(~ Problem) +
+    labs(x = "Health",
+         y = "Proportion of trees with the problem",
+         title = "Proportion of trees with one of the nine recordeed problems by their health") +
+    theme_bw()
+```
+
+The barplots indicate that, generally, the proportion of trees with issues increases from 'Good' to 'Fair' then 'Poor' health.
+
+We should also look to see if the proportion of problems varies by species.  For this, we will group all of the problems together in a new variable that indicates whether at least one of any root, trunk, or branch problem exists, then measure and plot the proportion of trees with an issue by species.  We will also filter out any species with a population lower than 50.
+
+```{r}
+# Create a new columns that identifies the trees with any problem
+tree_test <- trees %>%
+  select(root_stone:brch_other)
+tree_test$sums <- rowSums(tree_test == 'Yes')
+trees$any_prob <- ifelse(tree_test$sums == 0, 'No', 'Yes')
+
+# Select then plot the trees with the highest proportion of problems
+trees_top_probs <- trees %>%
+  group_by(spc_common) %>%
+  summarize(prop_yes = sum(any_prob == 'Yes') / n(),
+            tot = n()) %>%
+  filter(tot >= 50) %>%
+  arrange(desc(prop_yes))
+
+trees_top_probs %>%
+  ggplot(aes(x = prop_yes)) +
+    geom_histogram()
+
+shapiro.test(trees_top_probs$prop_yes)
+
+# Barplot of the species with the highest number of problems
+trees_top_probs %>%
+  head(n = 20) %>%
+  mutate(spc_common = fct_reorder(spc_common, desc(prop_yes))) %>%
+  ggplot(aes(x = spc_common,
+             y = prop_yes)) +
+    geom_col(fill = 'salmon4', color = 'grey40') +
+    labs(x = 'Species',
+         y = 'Proportion of trees with a problem',
+         title = 'Top 10 species with the most root, trunk, or branch problems') +
+    theme_long_labs
+
+trees_top_probs %>%
+  select(spc_common, prop_yes) %>%
+  head(n = 20) %>%
+  mutate(prop_yes = round(prop_yes, 3) * 100) %>%
+  htmlTable(header = c('Species', '% trees with a problem'))
 ```
 
 
@@ -226,9 +324,9 @@ trees %>%
 
 ## Most common tree species in Manhattan
 
-We should also look at how many times each tree name pops up.  For instance, the word 'pine' is a part of many species, such as 'black pine', 'Virginia pine', and 'white pine'.
+To determine which tree species are the most common in Manhattan, we will use two approaches.  First, we will count the total number of trees for each common name-species.  Second, we will group species of similar types and count the total number of trees in each.
 
-We will check for any dupilcated lines, which would mean the same word appears twice for a tree and may be an entry error (for example, 'pine red pine').  Then, we will print a list of the top 10 words that are in the species variable.
+For example, many of the species in this data set belong to the *Pinus* subgenus and include the word 'pine' in their common name, such as 'black pine', 'Virginia pine', and 'white pine'.  So, each tree with a common name that includes 'pine' will be groped together in the 'pine' group.
 
 ```{r common-species-plots}
 species_10 <- trees %>%
@@ -236,7 +334,8 @@ species_10 <- trees %>%
   count(name = 'total_trees') %>%
   arrange(desc(total_trees)) %>%
   head(n = 10) %>%
-  ungroup()
+  ungroup() %>%
+  drop_na()
 
 sp1 <- species_10 %>%
   mutate(spc_common = fct_reorder(spc_common, desc(total_trees))) %>%
@@ -259,9 +358,10 @@ sp1 <- species_10 %>%
 spc_tokens <- trees %>%
   select(tree_id, spc_common) %>%
   mutate(spc_common = as.character(spc_common)) %>%
-  unnest_tokens(word, spc_common)
-
-sum(duplicated(spc_tokens))
+  unnest_tokens(word, spc_common) %>%
+  mutate(word = tolower(word)) %>%
+  distinct() %>%
+  drop_na()
 
 scp_top <- spc_tokens %>%
   group_by(word) %>%
@@ -287,24 +387,26 @@ sp2 <- scp_top %>%
                                      vjust = 1,
                                      hjust = 1))
 
-grid.arrange(sp1, sp2, nrow = 1)
+sp1
+sp2
 ```
 
-Comparing this list with the results above we can conclude:
+Comparing the two barplots we can conclude:
 
-- 'honeylocust' is the most common tree species in Manhattan.
-- 'oak' is the second most common species, with 'pin oak' being the most abundant type of oak tree.
-- 'Callery pear' is the third most common species and is the only type of pear tree.
-- The next most common tree species are 'ginkgo', 'linden' with 'littleleaf linden' as the most prominent, 'Sophora', and 'London planetree'.
+1. 'honeylocust' is the most common tree species in Manhattan.
+2. 'oak' is the second most common species, with 'pin oak' being the most abundant type of oak tree.
+3. 'Callery pear' is the third most common species and is the only type of pear tree.
+4.  The next most common tree species are 'ginkgo', 'linden' with 'littleleaf linden' as the most prominent, 'Sophora', and 'London planetree'.
 
 
 ## Neighborhoods with the most trees
 
+The geospatial data set provided by Datacamp is corrupted and will not load properly, either locally or in the DataCamp workspace.  Therefore, we will load the raw data directly from NYC Open Data, then filter the spatial data set for only the Manhattan area and select only the three intended variables, **ntacode**, **ntaname**, and **geometry**.
 
-The spatial data set provided in the Data Camp assignment does not load properly in R, either locally or in the Data Camp workspace.  Therefore, we will load the raw data directly from NYC Open Data, then filter the spatial data set for only the Manhattan area.
-
-```{r}
-neighborhoods <- st_read('../data/raw/direct_NYC/geo_export_be6f9d73-0dae-46ea-bbed-99ae04ed44e2.shp', quiet=TRUE)
+```{r load-geo-data}
+neighborhoods <- st_read('../data/raw/direct_NYC/geo_export_be6f9d73-0dae-46ea-bbed-99ae04ed44e2.shp',
+                         quiet=TRUE) %>%
+  select(borocode, boroname, countyfips, ntacode, ntaname, shape_area, shape_leng, geometry)
 
 manhattan <- neighborhoods %>%
   filter(boroname == 'Manhattan')
@@ -312,13 +414,13 @@ manhattan <- neighborhoods %>%
 
 First, we will determine which neighborhoods have the most total number of trees.  Next we will calculate the area of each neighborhood, then calculate the number of trees per square meter.
 
-```{r}
+```{r top-neighborhoods}
 # Create a ggplot object for the top 10 neighborhoods with the most trees
 top_total <- trees %>%
   group_by(nta_name) %>%
   summarize(total_trees = n()) %>%
   arrange(desc(total_trees)) %>%
-  head(n = 5)
+  head(n = 10)
   
 p1 <- top_total %>%
   mutate(nta_name = fct_reorder(nta_name,
@@ -348,7 +450,7 @@ top_density <- left_join(trees %>% select(nta, nta_name),
   group_by(nta_name) %>%
   summarise(tree_by_area = n() / max(sq_m)) %>%
   arrange(desc(tree_by_area)) %>%
-  head(n = 5)
+  head(n = 10)
 
 p2 <- top_density %>%
   mutate(nta_name = fct_reorder(nta_name,
@@ -369,23 +471,22 @@ p2 <- top_density %>%
                                      hjust = 1))
 
 # Plot both graphs side-by-side
-grid.arrange(p1, p2, nrow = 1)
+grid.arrange(p1, p2, nrow = 2)
 ```
 
 The Upper West Side has the highest total number of trees for all of the neighborhoods in Manhattan.  Conversely, The Upper East Side-Carnegie Hill has the highest density of trees.
 
 
 
-
 ## Visualizing Manhattan's neighborhoods and tree locations.
 
-Then, we will plot the tree locations with the NTA neighborhood borders using a distinct color for the trees that reside in each neighborhood.
+For this visualization we will plot the tree locations with the NTA neighborhood borders using a distinct color for the trees that reside in each neighborhood.
 
 ```{r nta-tree-map}
 ggplot(manhattan) + 
   geom_point(data = trees,
              aes(longitude, latitude, color = nta_name),
-             size = 0.1, alpha = 0.05) +
+             size = 0.5, alpha = 0.05) +
   geom_sf(fill = NA) +
   scale_color_manual(name = 'Neighborhood',
                      values = as.vector(polychrome())) +
@@ -396,81 +497,118 @@ ggplot(manhattan) +
   guides(color = guide_legend(override.aes = list(pch = 15, size = 4, alpha = 1)))
 ```
 
+Similar to the previous results, the Upper East Side-Carnegie Hall, Central Harlem South, and the Upper West Side each appear to be densly populated with trees.  Conversely, Midtown-Midtown South, Battery Park City-Lower Manhattan, and Stuyvesant Town-Copper Village appear to be sparsely populated.
+
+
 ## Recommendations for future tree planting
 
+First, we will calculate the percentage of trees categorized as 'Good' or 'Poor' and get the median, 75th percentile, and maximum diameter for each species.  Species with a population below 50 will be filtered out.  Invasive species as identified in the [United States Register of Introduced and Invasive Species (US-RIIS) (ver. 2.0, November 2022)](https://www.sciencebase.gov/catalog/item/62d59ae5d34e87fffb2dda99?community=USGS+Science+Analytics+and+Synthesis+Foundational+Data) will also be removed from consideration.
 
-```{r}
+Next, each species will be ranked on health and size using a weighted-ranking approach.  We will assume that the desire for a tree in good health and with a large size are equal, so the features for health and diameter will be weighted equally (both contribute half to the final rankings).  For tree health, we will further weight 'Good' health as accounting or 75% of the weight of the health ranking and 'Poor' health to 25%, while not including 'Fair' or 'Dead'.  This weighing approach was chosen for a few reasons.  First, we do not know the circumstances of the 'Dead' trees, which could have been from disease, removal for construction, or another reason.  Additionally, 'Dead' trees account for a very small proportion of the total trees so it can be excluded from rankings.  The rest of the information then is contained in 'Good' and 'Poor' as if a tree is not in either state it would be recorded as 'Fair' otherwise, which we can assume to be neutral.  Finally, there is a larger range in the proportion of trees in 'Good' health by species than in 'Poor' health, and we are likely more interested in having a high proportion of trees in 'Good' health, so we add additional ranking weight for species that have better health overall.
+
+For tree size, only trees of at least 5 inches in diameter at a height of 54 inches were used, which is the size that is considered for a tree to have become a tree from a sapling ([USDA Forest Service](https://www.fs.usda.gov/detail/r5/landmanagement/resourcemanagement/?cid=fsbdev3_048158)).
+
+
+
+
+use the median diameter, diameter at the 75th quantile, and maximum diameter for each species.  These measurements were chosen because together they represent the highest 50% of trees and would likely therefore be more representative of mature tree sizes.
+
+Overall, the rankings are weighted equally between tree health and tree size.  For tree health, the proportion of trees in 'good' and 'poor' health account for 75% and 25% of its weight, respectively.  For tree size, the median diameter, diameter for the 75th quantile, and maximum diameter account for 50%, 33.3% and 16.7% (or 1/2, 1/3, and 1/6) of its weight, respectively.
+
+```{r weighted-ranks}
+# Create a df with statistics on tree health and size and filter out species with <50 pop
 trees_health_diam <- trees %>%
   group_by(spc_common) %>%
   summarize(perc_good = sum(health == 'Good') / n() * 100,
-            perc_fair = sum(health == 'Fair') / n() * 100,
             perc_poor = sum(health == 'Poor') / n() * 100,
-            perc_good_fair = perc_good + perc_fair,
-            median_diam = median(tree_dbh),
-            diam_75 = as.numeric(quantile(tree_dbh, 0.75)),
-            max_diam = max(tree_dbh),
+            diam_25 = as.numeric(quantile(tree_dbh[tree_dbh >= 5], 0.25)),
+            median_diam = median(tree_dbh[tree_dbh >= 5]),
+            diam_75 = as.numeric(quantile(tree_dbh[tree_dbh >= 5], 0.75)),
+            max_diam = max(tree_dbh[tree_dbh >= 5]),
             total = n()) %>%
   filter(total >= 50) %>%
   arrange(desc(perc_good))
 
-head(trees_health_diam)
-
-head(trees_health_diam,
-     n = 20) %>%
-  mutate(across(perc_good:perc_good_fair, ~ round(.x, 1))) %>%
-  htmlTable(header = c('Species', '% Good', '% Fair', '% Poor', '% Good or Fair', 'Median Diameter',
-                       'Max Diameter', 'Total'))
-
-# Filter out invasive species
+# Load the relevant data from the US invasive species register
 invasive_df <- read_csv('../data/external/USRIISv2_MasterList.csv') %>%
   select(vernacularName) %>%
   mutate(vernacularName = tolower(vernacularName))
 
+# Create a new df with values for all of the invasive species
 invasive_species <- trees_health_diam %>%
   mutate(spc_common = tolower(spc_common)) %>%
   inner_join(invasive_df %>% mutate(vernacularName = tolower(vernacularName)),
              by = c('spc_common' = 'vernacularName')) %>%
   distinct()
 
-
+# Remove the invasive species from the data set
 trees_noninvasive <- trees_health_diam %>%
   filter(!tolower(spc_common) %in% invasive_species$spc_common)
 
-# Weighted ranks-based approach
+# Print an HTML table of the top 15 trees using a weighted ranks-based approach
 trees_noninvasive %>%
   mutate(good_rank = rank(1 / perc_good),
          poor_rank = rank(perc_poor),
+         diam_25_rank = rank(1 / diam_25),
          median_rank = rank(1 / median_diam),
          diam_75_rank = rank(1 / diam_75),
          max_rank = rank(1 / max_diam)) %>%
   rowwise() %>%
-  mutate(avg_rank = mean(c(good_rank * 3/4, poor_rank / 4, median_rank * 3/12, diam_75_rank / 6, max_rank * 1/12))) %>%
+  mutate(avg_rank = mean(c(good_rank * 0.5, poor_rank * 0.5,
+                           diam_25_rank * 0.25, median_rank * 0.25,
+                           diam_75_rank * 0.25, max_rank * 0.25))) %>%
   ungroup() %>%
   mutate(perc_good = round(perc_good, 1),
          perc_poor = round(perc_poor, 1),
          avg_rank = rank(avg_rank)) %>%
   arrange(avg_rank) %>%
-  select(spc_common, perc_good, perc_poor, median_diam, diam_75, max_diam, avg_rank) %>%
-  head(n = 20) %>%
-  htmlTable(header = c('Species', '% Good', '% Poor', 'Median Diameter', '75th Quantile', 'Max Diameter', 'Weighted Rank'))
+  select(spc_common, perc_good, perc_poor, diam_25, median_diam, diam_75, max_diam, total, avg_rank) %>%
+  head(n = 15) %>%
+  htmlTable(header = c('Species', '% Good', '% Poor', '25th Quantila', 'Median Diameter',
+                       '75th Quantile', 'Maximum Diameter', 'Population', 'Weighted Rank'))
 ```
 
-The rankings are weighted equally between tree health and tree size.  For tree health, the proportion of trees in 'good' and 'poor' health account for 75% and 25% of its weight, respectively.  For tree size, the median diameter, diameter for the 75th quantile, and maximum diameter account for 50%, 33.3% and 16.7%, or 1/2, 1/3, and 1/6, of its weight, respectively.
+The pin oak is the highest ranking tree on the list. As per the [University of Kentucky Department of Horticulture](https://www.uky.edu/hort/Pin-oak), while the pin oak is easy to transplant and ideal for large landscapes, it has a high-maintenance cost due to its lowly hanging branches.  It is recommended to plant pin oaks in the future, but only in locations where they can get the full sun.
 
-Of the top 20 weighted ranks, 6 species of oak and 3 species of elm are represented, indicating that oak and elm trees generally have good health and grow to a larger size in Manhattan compared to other species.  Therefore, these types of tree species generally should have preferences for future planting. 
+Although the honeylocust is a very common tree throughout Manhattan, it is suggested by the [Univeristy of Kentucky](https://www.uky.edu/hort/Honeylocust) that these trees are overused to where they have developed a host of diseases and insect problems that has led to an overall shorter lifespan for this species.  
 
-Of the top 20 species, 6 are invasive species and should not be in consideration for future planting.  These species are:
+The willow oak has a host of features that make it a great tree for planing in Manhattan ([UKY](https://www.uky.edu/hort/Willow-Oak)).  Willow oaks have a tolerance for acidic soil, pollution, and drought, are easy to transplant, have no major disease or insect problems, and grows a large canopy that is a great source of shade.  Therefore, the willow oak appears to be a great tree to plant.
 
+American elm
 
-The tree that ranked highest for having good health and a large size is the willow oak.  
+Although not considered an invasive species in the United States, the black locust is a [regulated and prohibited species in New York state](https://www.wnyprism.org/invasive_species/black-locust/), as the species is reported to alter local soil characteristics and produce canopies that block sunlight for nearby seedlings of other plants.
 
-The pin oak is the third ranking tree on the list. As per the [University of Kentucky Department of Horticulture](https://www.uky.edu/hort/Pin-oak), while the pin oak is easy to transplant and ideal for large landscapes, it has a high-maintenance cost due to its lowly hanging branches.
+Although a native tree of China, the Sophora is [not considered an invasive species in the United States](https://sunyorange.edu/inttreetour/sophora_japonica.html).  However, the tree does require a lot of maintenance to survive as it is very vulnerable to disease, pests, and strong weather.  
 
 Kentucky coffeetree [UKY](https://www.uky.edu/hort/Kentucky-Coffeetree) 
 
-The American elm had the largest median, 75th quantile, and maximum diameter in the top 20 list while also having over 80% of trees in good health.  [USDA](https://www.srs.fs.usda.gov/pubs/misc/ag_654/volume_2/ulmus/americana.htm)
+White ash [UKY](https://www.uky.edu/hort/White-Ash)
 
-[United States Register of Introduced and Invasive Species (US-RIIS) (ver. 2.0, November 2022)](https://www.sciencebase.gov/catalog/item/62d59ae5d34e87fffb2dda99?community=USGS+Science+Analytics+and+Synthesis+Foundational+Data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Of the top 15 weighted ranks, 5 species of oak are represented.  This suggests that oak trees generally have good health and grow to a larger size in Manhattan commpared to other present species.
+
+The tree that ranked highest for having good health and a large size is the willow oak.  
+
+
+
+
+
+The American elm had the largest diameter measures in the top 20 list while also having over 80% of trees in good health.  [USDA](https://www.srs.fs.usda.gov/pubs/misc/ag_654/volume_2/ulmus/americana.htm)
+
+
 
 
 [USDA NY Weeds](https://adminplants.sc.egov.usda.gov/java/invasiveOne?pubID=NEAST)
