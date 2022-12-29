@@ -1,0 +1,1 @@
+This repo contains the raw data, analysis, and results for the [DataCamp competition: Which tree species should the city plant?](https://app.datacamp.com/learn/competitions/city-tree-species).  The final report can be accessed [here](https://refined-github-html-preview.kidonng.workers.dev/tylerbg/datacamp-NYC-trees/raw/main/results/NYC-tree-analysis.html). 
